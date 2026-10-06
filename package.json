@@ -1,0 +1,17 @@
+{
+  "name": "automation-out-reqres-api",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:api": "playwright test tests/api",
+    "test:api:mock": "node scripts/run-mock-tests.mjs",
+    "test:ci": "playwright test tests/api",
+    "report": "playwright show-report playwright-report",
+    "install:browsers": "playwright install"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "typescript": "^5.5.0"
+  }
+}

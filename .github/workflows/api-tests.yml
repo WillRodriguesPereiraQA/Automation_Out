@@ -1,0 +1,92 @@
+name: API Tests CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Test target'
+        required: true
+        default: mock
+        type: choice
+        options:
+          - mock
+          - live
+
+concurrency:
+  group: api-tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+env:
+  CI: true
+
+jobs:
+  api-tests:
+    name: Playwright API Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      # Mock server in CI avoids reqres.in IP rate limits and keeps runs deterministic.
+      REQRES_MOCK: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'live' && '0' || '1' }}
+      REQRES_API_KEY: ${{ secrets.REQRES_API_KEY }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run API test suite
+        run: npm run test:ci
+
+      - name: Publish unit test results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: test-results/junit.xml
+          check_name: ReqRes API Tests
+          comment_title: ReqRes API — test results
+
+      - name: Build pipeline execution summary
+        if: always()
+        run: node scripts/ci-job-summary.mjs
+        env:
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          REQRES_MOCK: ${{ env.REQRES_MOCK }}
+
+      - name: Upload Playwright HTML report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-${{ github.run_number }}
+          path: playwright-report/
+          retention-days: 30
+
+      - name: Upload machine-readable results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: api-test-results-${{ github.run_number }}
+          path: |
+            test-results/junit.xml
+            test-results/results.json
+          retention-days: 30
